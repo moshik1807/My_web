@@ -1,6 +1,7 @@
 // App shell: camera, timeline, location, and turning the whole scene into another era.
 import * as THREE from 'three';
 import { LiveView } from './live.js';
+import { SceneParser } from './scene.js';
 import { LocationService, PRESETS } from './location.js';
 import { ERAS, eraFor, profileFor, REGIONS } from './periods.js';
 import { loadSettings, saveSettings, PROVIDERS, transformImage } from './ai.js';
@@ -28,6 +29,7 @@ catch (e) { $('#intro .card p').textContent = 'הדפדפן הזה לא תומך
 const dpr = Math.min(window.devicePixelRatio || 1, 2);
 let W = 1, H = 1;
 const live = new LiveView(renderer);
+const parser = new SceneParser();
 const loc = new LocationService();
 
 function resize() {
@@ -54,7 +56,7 @@ function updateEra() {
   $('#yearText').textContent = state.year;
   $('#eraLabel').textContent = p.label; $('#eraBlurb').textContent = p.blurb;
   $('#eraSpan').textContent = `${p.era.start}–${Math.min(p.era.end, YEAR_MAX)}`;
-  live.setGrade(p.grade);
+  live.setEra(p.grade, p.scene);
   document.querySelectorAll('.klabel').forEach((el) => el.classList.toggle('active', +el.dataset.year === p.era.year));
   const now = p.era.key === 'now';
   $('#shutter').innerHTML = now ? 'בחרו<br>שנה' : (state.year < new Date().getFullYear() ? 'הפכו<br>לעבר' : 'הפכו<br>לעתיד');
@@ -117,9 +119,16 @@ async function startCamera() {
     status('אין גישה למצלמה. אשרו גישה למצלמה בהגדרות הדפדפן ורעננו את הדף.');
     return;
   }
+  sceneInfo('טוען את מנוע הבנת הסצנה…');
+  parser.init((msg) => sceneInfo(msg)).then(() => sceneInfo(''), (e) => {
+    console.error(e);
+    sceneInfo('לא הצלחנו לטעון את מודל הסצנה. בדקו את החיבור לאינטרנט ורעננו את הדף.', true);
+  });
   if (profile().era.key === 'now') toast('גררו את סרגל הזמן לשנה אחרת, ואז לחצו "הפכו לעבר".', 5000);
 }
 $('#startCamera').addEventListener('click', startCamera);
+
+function sceneInfo(msg, isErr = false) { const el = $('#sceneInfo'); el.hidden = !msg; el.textContent = msg; el.classList.toggle('bad', isErr); }
 
 /* ---------------------------------------------------------------- AI: the whole scene in another era */
 let abort = null, resultUrl = null;
@@ -266,11 +275,14 @@ const clock = new THREE.Clock(); let time = 0;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05); time += dt;
   if (state.playing) { const y = playFrom + (performance.now() - playT0) / 1000 * 8; if (y >= YEAR_MAX) { setYear(YEAR_MAX); stopPlay(); } else setYear(y); }
-  if (live.video) live.render(dt, time);
+  if (live.video) {
+    if (parser.ready && profile().scene) parser.update(video).catch((e) => console.error(e));
+    live.setSegmentation(parser); live.render(dt, time);
+  }
   requestAnimationFrame(frame);
 }
 
 buildTicks(); resize(); setYear(state.year); updatePlace();
 detectServer();
 requestAnimationFrame(frame);
-window.__vw = { state, live, loc, setYear };
+window.__vw = { state, live, loc, setYear, parser };

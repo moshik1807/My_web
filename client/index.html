@@ -57,6 +57,8 @@ video#cam { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-eve
 .era-year { font-family: var(--f-display); font-weight: 700; font-size: clamp(40px, 9vw, 64px); line-height: 0.92; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 10px; }
 .era-year small { font-family: var(--f-ui); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--brass); direction: ltr; white-space: nowrap; }
 .era-label { margin-top: 6px; font-family: var(--f-display); font-size: 18px; font-weight: 500; color: var(--brass-hi); text-wrap: balance; }
+.scene-info { margin-top: 6px; font-size: 12px; color: var(--brass-hi); }
+.scene-info.bad { color: var(--warn); }
 .era-blurb { margin-top: 3px; color: var(--ink-dim); line-height: 1.45; font-size: 13.5px; text-wrap: pretty; }
 
 .side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; min-width: 0; max-width: min(20rem, 40vw); }
@@ -169,6 +171,7 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
       <div class="era-year"><span id="yearText">1920</span><small id="eraSpan"></small></div>
       <div class="era-label" id="eraLabel"></div>
       <div class="era-blurb" id="eraBlurb"></div>
+      <div class="scene-info" id="sceneInfo" hidden></div>
     </section>
     <div class="side">
       <button class="panel place" id="placeBtn">
@@ -208,7 +211,7 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
     <div class="card">
       <div class="eyebrow">VISION WINDOW</div>
       <h1>מה היה כאן פעם?</h1>
-      <p>כוונו את המצלמה לסביבה ובחרו שנה. המצלמה מקבלת מיד את המראה של צילום מאותה תקופה. בלחיצה על "הפכו לעבר", כל הסביבה נבנית מחדש כפי שנראתה אז: הרחוב, הבניינים, האנשים וכלי הרכב.</p>
+      <p>כוונו את המצלמה לסביבה ובחרו שנה. כל מה שהמצלמה רואה משתנה בזמן אמת: השמיים, הבניינים, הכביש והמדרכה, האנשים, וכלי הרכב והעמודים נעלמים. "הפכו לעבר" יוצר בנוסף צילום מציאותי בעזרת AI.</p>
       <div class="actions">
         <button class="cta primary" id="startCamera">פתחו את החלון<small>מצלמה ומיקום</small></button>
       </div>

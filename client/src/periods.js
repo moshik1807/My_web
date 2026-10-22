@@ -1,5 +1,6 @@
 // What a place looked like in each era, per region: the photographic look of the live view
-// (`grade`) and the description the AI uses to rebuild the whole scene (`prompt`).
+// (`grade`), how the live view rebuilds each part of the scene (`scene`), and the description the
+// AI uses to rebuild the whole picture (`prompt`).
 
 export const ERAS = [
   { key: 'e1880', year: 1880, start: 1850, end: 1899 },
@@ -131,9 +132,33 @@ const PRESENT = {
 
 const TABLES = { levant: LEVANT, europe: EUROPE, north_america: NORTH_AMERICA, global: EUROPE };
 
+/* How the live view rebuilds each part of the scene. wall: 0 cut stone, 1 plaster, 2 concrete,
+   3 future panels with greenery; road: 0 dirt, 1 cobblestones, 2 worn asphalt, 3 smart road;
+   walk: 0 packed earth, 1 stone slabs; sky: haze 0..1; cloth: what people's clothes are dyed. */
+const S = (wall, wallColor, road, roadColor, walk, walkColor, haze, cloth, plant = 1) => ({ wall, wallColor, road, roadColor, walk, walkColor, haze, cloth, plant });
+const SCENES = {
+  levant: {
+    e1880: S(0, '#d8c39c', 0, '#c9b089', 0, '#bfa67f', 0.75, ['#e6dcc6', '#3d4a66', '#6c5a44', '#2a2430']),
+    e1920: S(0, '#ddd0b4', 1, '#8d8473', 1, '#c2b59a', 0.55, ['#3a3a3c', '#5a5146', '#e3dccb', '#2e2a2a']),
+    e1970: S(1, '#e7e1d3', 2, '#5d5a55', 1, '#aaa497', 0.25, ['#c45a2c', '#d9a441', '#3f6f9a', '#6a8a3c']),
+    e2050: S(3, '#eef3f2', 3, '#2f3a3e', 1, '#d9dedc', 0.1, ['#e6eef0', '#9be7d8', '#c7d2fe'], 1.25),
+  },
+  europe: {
+    e1880: S(0, '#a98e70', 1, '#6f665b', 1, '#a69c8c', 0.8, ['#24221f', '#3b2a3a', '#4a4238', '#2a3340']),
+    e1920: S(0, '#b3a38b', 1, '#77705f', 1, '#aaa18f', 0.6, ['#3a3a3c', '#4a4238', '#e3dccb', '#2e2a2a']),
+    e1970: S(2, '#bdb6aa', 2, '#55534f', 1, '#a39e94', 0.3, ['#c45a2c', '#6a8a3c', '#d9a441', '#8a4f7a']),
+  },
+  north_america: {
+    e1880: S(0, '#9c7a5e', 0, '#a58c6a', 0, '#8f7a5e', 0.8, ['#4a4238', '#6b5a44', '#3b2a3a']),
+  },
+};
+SCENES.europe.e2050 = SCENES.levant.e2050;
+SCENES.north_america = { ...SCENES.europe, ...SCENES.north_america };
+SCENES.global = SCENES.europe;
+
 export function profileFor(regionKey, year) {
   const era = eraFor(year);
   const p = era.key === 'now' ? PRESENT : (TABLES[regionKey] || EUROPE)[era.key];
-  return { ...p, era, region: regionKey };
+  return { ...p, era, region: regionKey, scene: era.key === 'now' ? null : (SCENES[regionKey] || SCENES.europe)[era.key] };
 }
 
