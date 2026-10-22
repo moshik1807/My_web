@@ -68,6 +68,13 @@ test('timeline round-trips the bundled dataset', { skip: !enabled }, async () =>
   assert.deepEqual(body.blocks.north, demo.blocks.north);
 });
 
+test('AI transform validates input and reports when no key is configured', { skip: !enabled }, async () => {
+  const post = (body) => fetch(base + '/api/ai/transform', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const health = await get('/api/health');
+  if (!health.body.ai) assert.equal((await post({ image: 'abc', prompt: 'x' })).status, 503);
+  else assert.equal((await post({ prompt: 'x' })).status, 400);
+});
+
 test('stream pushes a manifest once per site and era', { skip: !enabled }, async () => {
   const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
   const msgs = [];

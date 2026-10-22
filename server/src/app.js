@@ -117,7 +117,28 @@ export function createApp() {
 
   app.get('/api/health', route(async (req, res) => {
     const { rows } = await query('SELECT postgis_version() AS postgis');
-    res.json({ ok: true, postgis: rows[0].postgis });
+    res.json({ ok: true, postgis: rows[0].postgis, ai: !!process.env.GEMINI_API_KEY });
+  }));
+
+  // "Photo from the past" through the server's own Gemini key, so the key never reaches browsers.
+  app.post('/api/ai/transform', express.json({ limit: '12mb' }), route(async (req, res) => {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new HttpError(503, 'AI is not configured on this server (set GEMINI_API_KEY)');
+    const { image, mime = 'image/jpeg', prompt } = req.body || {};
+    if (typeof image !== 'string' || !image.length || typeof prompt !== 'string' || !prompt.trim()) throw new HttpError(400, 'image (base64) and prompt are required');
+    if (!/^image\/(jpeg|png|webp)$/.test(mime)) throw new HttpError(400, 'mime must be image/jpeg, image/png or image/webp');
+    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
+    const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt.slice(0, 8000) }, { inline_data: { mime_type: mime, data: image } }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
+    });
+    const j = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) throw new HttpError(upstream.status === 429 ? 429 : 502, j.error?.message || `upstream error ${upstream.status}`);
+    const part = (j.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData || p.inline_data);
+    if (!part) throw new HttpError(502, 'the model returned no image');
+    const d = part.inlineData || part.inline_data;
+    res.json({ image: d.data, mime: d.mimeType || d.mime_type || 'image/png' });
   }));
 
   app.get('/api/locations/nearby', route(async (req, res) => {

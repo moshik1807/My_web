@@ -16,6 +16,7 @@ services:
     build: { context: ., dockerfile: server/Dockerfile }
     environment:
       DATABASE_URL: postgres://vision:vision@db:5432/vision_window
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports: ["8080:8080"]
     depends_on:
       db: { condition: service_healthy }
