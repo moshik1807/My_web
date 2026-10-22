@@ -1,0 +1,11 @@
+{
+  "name": "Party Speaker",
+  "short_name": "Speaker",
+  "description": "הופכים הרבה טלפונים לרמקול אחד גדול",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#120c24",
+  "theme_color": "#120c24",
+  "lang": "he",
+  "dir": "rtl"
+}
