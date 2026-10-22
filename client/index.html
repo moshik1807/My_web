@@ -5,19 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Vision Window</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Vision Window: point your camera at a street and see it in another era">
+<meta name="description" content="Vision Window: point your camera at any street and see the whole scene in another era">
 <meta name="theme-color" content="#0d0c0b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script type="importmap">
 { "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-  "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs"
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
 } }
 </script>
 <style>
-/* Layout: full-bleed viewport (camera or 3D); HUD floats in a top band (era, place, detections) and a bottom band (shutter, timeline, controls). Single dark look by design: it sits over a live camera. */
+/* Layout: full-bleed camera; HUD floats in a top band (era, place) and a bottom band (transform button, timeline, controls). Single dark look by design: it sits over a live camera. */
 :root {
   --ink: #f4ede1;
   --ink-dim: #b9b1a3;
@@ -69,21 +68,15 @@ video#cam { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-eve
 .place .pmeta { font-size: 12px; color: var(--ink-dim); display: flex; gap: 6px; align-items: center; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex: none; }
 .dot.ok { background: var(--ok); } .dot.wait { background: var(--brass); } .dot.bad { background: var(--warn); }
-.seen { padding: 9px 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink-dim); width: 100%; box-sizing: border-box; }
-.seen h3 { margin: 0 0 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--ink-faint); }
-.seen ul { margin: 0; padding: 0; list-style: none; }
-.seen li { color: var(--ink); }
-.seen li::before { content: "◦ "; color: var(--brass); }
-.seen .empty { color: var(--ink-faint); }
-.seen .empty::before { content: none; }
-.stats { padding: 10px 12px; font-family: var(--f-mono); font-size: 11px; line-height: 1.6; color: var(--ink-dim); direction: ltr; min-width: 12.5rem; font-variant-numeric: tabular-nums; }
-.stats dl { margin: 0; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; }
-.stats dt { color: var(--ink-faint); } .stats dd { margin: 0; text-align: right; color: var(--ink); }
-
 .shutter-row { display: flex; justify-content: center; align-items: center; gap: 14px; margin-bottom: 4px; }
 .shutter { pointer-events: auto; width: 74px; height: 74px; border-radius: 50%; border: 3px solid var(--brass-hi); background: radial-gradient(circle at 40% 35%, #ffe2b0, var(--brass) 60%, #8d6328); box-shadow: 0 0 0 5px rgba(16,15,13,0.55), 0 6px 22px rgba(0,0,0,0.5); cursor: pointer; display: grid; place-items: center; color: #1b160f; font: 700 11px/1.15 var(--f-ui); text-align: center; padding: 6px; }
 .shutter:active { transform: scale(0.96); }
 .shutter:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; }
+.progress { pointer-events: none; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--hair); padding: 7px 12px; border-radius: 999px; }
+.progress i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--hair); border-top-color: var(--brass); animation: spin 0.9s linear infinite; flex: none; }
+.progress.err { color: var(--warn); white-space: normal; max-width: min(26rem, 80vw); border-radius: 12px; pointer-events: auto; }
+.toggle { pointer-events: auto; background: var(--glass-strong); color: var(--ink); padding: 10px 14px; }
+.toggle[aria-pressed="true"] { background: var(--brass); color: #1b160f; }
 .shutter-hint { pointer-events: none; font-size: 12px; color: var(--ink-dim); background: var(--glass); border: 1px solid var(--hair); padding: 5px 10px; border-radius: 999px; max-width: 13rem; text-align: center; }
 
 .timeline { padding: 10px 14px 8px; display: flex; gap: 12px; align-items: center; direction: ltr; }
@@ -109,15 +102,10 @@ video#cam { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-eve
 .group { display: flex; gap: 4px; align-items: center; padding: 4px; flex: none; }
 .group-label { font-size: 11px; color: var(--ink-faint); padding: 0 6px; letter-spacing: 0.04em; white-space: nowrap; }
 .btn { font: 600 13px/1 var(--f-ui); color: var(--ink-dim); background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 8px 11px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.btn { text-decoration: none; }
 .btn:hover { color: var(--ink); background: rgba(255,255,255,0.05); }
 .btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 .btn[aria-pressed="true"] { color: #1b160f; background: var(--brass); }
-.hour { display: flex; align-items: center; gap: 8px; padding: 0 8px; direction: ltr; }
-.hour output { font-family: var(--f-mono); font-size: 12px; min-width: 3.2em; font-variant-numeric: tabular-nums; }
-#hour { width: 110px; accent-color: var(--brass); }
-
-.joy { position: absolute; left: calc(var(--gutter-l) + 6px); width: 108px; height: 108px; border-radius: 50%; border: 1px solid var(--hair); background: rgba(16,15,13,0.35); touch-action: none; }
-.joy i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(240,199,136,0.85); }
 
 .toast { position: absolute; left: 50%; transform: translateX(-50%); top: 40%; max-width: min(30rem, calc(100vw - 48px)); padding: 11px 16px; text-align: center; line-height: 1.5; font-size: 14px; background: var(--glass-strong); border: 1px solid var(--hair); border-radius: 12px; pointer-events: none; opacity: 0; transition: opacity .35s; z-index: 30; }
 .toast.show { opacity: 1; }
@@ -151,14 +139,7 @@ video#cam { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-eve
 .nearby span { color: var(--ink-faint); font-family: var(--f-mono); font-size: 11.5px; white-space: nowrap; }
 a { color: var(--brass-hi); }
 
-.result { width: min(46rem, 100%); }
-.compare { position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #000; margin-top: 12px; touch-action: none; cursor: ew-resize; }
-.compare img { display: block; width: 100%; height: auto; pointer-events: none; }
-.compare .after { position: absolute; inset: 0; clip-path: inset(0 0 0 50%); }
-.compare .after img { width: 100%; height: 100%; object-fit: fill; }
-.compare .handle { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--brass-hi); left: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.6); }
-.compare .tag { position: absolute; top: 8px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,0.6); }
-.compare .tag.now { left: 8px; } .compare .tag.then { right: 8px; color: var(--brass-hi); }
+.shutter[disabled] { opacity: 0.55; cursor: progress; }
 .spinner { padding: 50px 10px; text-align: center; color: var(--ink-dim); }
 .spinner i { display: block; width: 34px; height: 34px; margin: 0 auto 12px; border-radius: 50%; border: 3px solid var(--hair); border-top-color: var(--brass); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -170,8 +151,6 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
   .era { padding: 10px 12px; }
   .era-blurb { display: none; }
   .side { max-width: 46vw; }
-  .seen { font-size: 11.5px; }
-  .stats { min-width: 0; font-size: 10px; }
   .klabel .today { display: none; }
   .shutter { width: 64px; height: 64px; font-size: 10px; }
   .shutter-hint { display: none; }
@@ -182,7 +161,6 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
 <body>
 <div id="app">
   <canvas id="gl" aria-label="חלון לעבר"></canvas>
-  <canvas id="debug" hidden></canvas>
   <video id="cam" playsinline muted></video>
   <div class="status" id="status" hidden></div>
 
@@ -198,20 +176,14 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
         <span class="pname" id="placeName">מאתר מיקום…</span>
         <span class="pmeta"><i class="dot wait" id="gpsDot"></i><span id="placeMeta">GPS</span></span>
       </button>
-      <section class="panel seen" id="seen" hidden>
-        <h3>מה המצלמה מזהה</h3>
-        <ul id="seenList"></ul>
-      </section>
-      <div class="panel stats" id="stats" hidden><dl id="statsList"></dl></div>
     </div>
   </div>
 
-  <div class="joy" id="joy" hidden><i></i></div>
-
   <div class="hud hud-bottom" id="hudBottom" hidden>
-    <div class="shutter-row" id="shutterRow" hidden>
-      <span class="shutter-hint">צילום מציאותי מהעבר, בעזרת AI</span>
-      <button class="shutter" id="shutter" aria-label="צלם תמונה מהעבר">צלם<br>מהעבר</button>
+    <div class="shutter-row">
+      <span class="progress" id="progress" hidden></span>
+      <button class="shutter" id="shutter" aria-label="הפכו את כל הסביבה לשנה שנבחרה">הפכו<br>לעבר</button>
+      <button class="btn panel toggle" id="btnLoop" aria-pressed="false">רציף</button>
     </div>
     <div class="panel timeline">
       <button class="play" id="play" aria-label="הפעלת מסע בזמן"><svg viewBox="0 0 10 10"><path id="playIcon" d="M2 1l7 4-7 4z"/></svg></button>
@@ -221,38 +193,13 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
       </div>
     </div>
     <div class="controls">
-      <div class="panel group" role="group" aria-label="מצב">
-        <button class="btn" data-mode="camera" aria-pressed="false">מצלמה</button>
-        <button class="btn" data-mode="photo" aria-pressed="false">תמונה</button>
-        <button class="btn" data-mode="model" aria-pressed="false">יפו בתלת-ממד</button>
-      </div>
-      <div class="panel group"><button class="btn" id="btnLens" aria-pressed="false">עדשת רנטגן</button></div>
-      <div class="panel group" role="group" aria-label="שכבות" id="layersAR">
-        <span class="group-label">שכבות</span>
-        <button class="btn" data-ar-layer="people" aria-pressed="true">אנשים</button>
-        <button class="btn" data-ar-layer="transport" aria-pressed="true">תחבורה</button>
-        <button class="btn" data-ar-layer="furniture" aria-pressed="true">ריהוט רחוב</button>
-        <button class="btn" data-ar-layer="grade" aria-pressed="true">צבעי תקופה</button>
-      </div>
-      <div class="panel group" role="group" aria-label="שכבות" id="layers3D" hidden>
-        <span class="group-label">שכבות</span>
-        <button class="btn" data-layer="buildings" aria-pressed="true">מבנים</button>
-        <button class="btn" data-layer="people" aria-pressed="true">דמויות</button>
-        <button class="btn" data-layer="vehicles" aria-pressed="true">תחבורה</button>
-        <button class="btn" data-layer="atmosphere" aria-pressed="true">אווירה</button>
-      </div>
-      <div class="panel group" id="hourGroup" hidden>
-        <span class="group-label">שעה</span>
-        <div class="hour"><input type="range" id="hour" min="0" max="24" step="0.25" value="17.5" aria-label="שעה ביום"><output id="hourOut">17:30</output></div>
-      </div>
-      <div class="panel group" role="group" aria-label="מזג אוויר" id="weatherGroup" hidden>
-        <button class="btn" data-weather="clear" aria-pressed="true">בהיר</button>
-        <button class="btn" data-weather="fog" aria-pressed="false">ערפל</button>
-        <button class="btn" data-weather="rain" aria-pressed="false">גשם</button>
+      <div class="panel group">
+        <button class="btn" id="btnLens" aria-pressed="false">עדשת רנטגן</button>
+        <button class="btn" id="btnLive" aria-pressed="false" hidden>חזרה למצלמה</button>
+        <a class="btn" id="btnSave" hidden download="vision-window.jpg">שמירת התמונה</a>
       </div>
       <div class="panel group">
         <button class="btn" id="btnSettings">הגדרות AI</button>
-        <button class="btn" id="btnStats" aria-pressed="false">ביצועים</button>
       </div>
     </div>
   </div>
@@ -261,13 +208,11 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
     <div class="card">
       <div class="eyebrow">VISION WINDOW</div>
       <h1>מה היה כאן פעם?</h1>
-      <p>כוונו את המצלמה לרחוב ובחרו שנה. האנשים שהמצלמה רואה יקבלו בגדים מאותה תקופה. אופנוע יהפוך לחמור, ספסל לאבן, והתמונה כולה תיראה כמו צילום מאותן שנים. ההתאמה נקבעת לפי המיקום שלכם.</p>
+      <p>כוונו את המצלמה לסביבה ובחרו שנה. המצלמה מקבלת מיד את המראה של צילום מאותה תקופה. בלחיצה על "הפכו לעבר", כל הסביבה נבנית מחדש כפי שנראתה אז: הרחוב, הבניינים, האנשים וכלי הרכב.</p>
       <div class="actions">
-        <button class="cta primary" id="startCamera">פתחו את החלון<small>מצלמה ומיקום. כל העיבוד נעשה במכשיר שלכם.</small></button>
-        <button class="cta" id="startPhoto">העלו תמונה של רחוב<small>מתאים למחשב, או לתמונה שכבר צילמתם</small></button>
-        <button class="cta" id="startModel">טיילו ביפו בתלת-ממד<small>שחזור של כיכר השעון בחמש תקופות</small></button>
+        <button class="cta primary" id="startCamera">פתחו את החלון<small>מצלמה ומיקום</small></button>
       </div>
-      <p class="note">המצלמה והמיקום לא נשלחים לשום מקום. רק כשלוחצים על "צלם מהעבר", התמונה נשלחת לספק ה-AI שבחרתם.</p>
+      <p class="note">המיקום קובע איך נראה האזור בכל תקופה. התמונה נשלחת למודל ה-AI רק כשלוחצים על "הפכו לעבר" או מפעילים מצב רציף.</p>
     </div>
   </div>
 
@@ -277,7 +222,7 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
       <p id="placeDetail"></p>
       <ul class="nearby" id="nearby"></ul>
       <div class="row"><button class="cta primary" id="useGPS">השתמשו ב-GPS</button></div>
-      <p class="note">או בחרו מקום לדוגמה. המקום קובע אילו בגדים, כלי תחבורה וריהוט יופיעו.</p>
+      <p class="note">או בחרו מקום לדוגמה. המקום קובע איך תיבנה הסביבה בכל תקופה.</p>
       <div class="presets" id="presets"></div>
       <div class="row"><button class="cta" type="button" data-close>סגירה</button></div>
     </div>
@@ -285,28 +230,18 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
 
   <div class="sheet" id="settingsSheet" hidden>
     <form class="card" id="settingsForm" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <h2 id="settingsTitle">צילום מציאותי מהעבר</h2>
-      <p>כפתור "צלם מהעבר" שולח את התמונה למודל AI שעורך תמונות. המודל מלביש את האנשים, מחליף כלי רכב וריהוט, ומסיר את מה שלא היה קיים אז. לשם כך צריך מפתח API משלכם.</p>
-      <div class="field"><label for="aiProvider">ספק</label>
-        <select id="aiProvider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></div>
-      <div class="field"><label for="aiKey">מפתח API</label><input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="הדביקו כאן את המפתח"></div>
+      <h2 id="settingsTitle">מנוע ה-AI</h2>
+      <p>המנוע בונה מחדש את כל התמונה כפי שהמקום נראה בשנה שבחרתם.</p>
+      <div class="field"><label for="aiProvider">מנוע</label>
+        <select id="aiProvider"><option value="free">חינמי, בלי מפתח (FLUX Kontext)</option><option value="gemini">Google Gemini (מפתח, בתשלום לפי שימוש)</option><option value="openai">OpenAI (מפתח, בתשלום לפי שימוש)</option></select></div>
+      <div class="field"><label for="aiKey" id="aiKeyLabel">מפתח API</label><input id="aiKey" type="password" autocomplete="off" spellcheck="false"></div>
       <div class="field"><label for="aiModel">מודל (לא חובה)</label><input id="aiModel" type="text" autocomplete="off" spellcheck="false"></div>
-      <p class="note">איפה משיגים מפתח: <a id="keyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. המפתח נשמר רק בדפדפן הזה. כל יצירת תמונה עולה כסף לפי התעריף של הספק.</p>
-      <p class="note" id="serverNote" hidden>השרת של הפרויקט מוגדר עם מפתח, ולכן לא צריך להזין מפתח כאן.</p>
+      <p class="note" id="providerNote"></p>
+      <p class="note" id="serverNote" hidden>השרת של הפרויקט מוגדר עם מפתח, ולכן הבקשות עוברות דרכו.</p>
       <div class="row"><button class="cta primary" type="submit">שמירה</button><button class="cta" type="button" data-close>ביטול</button></div>
     </form>
   </div>
 
-  <div class="sheet" id="resultSheet" hidden>
-    <div class="card result" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
-      <h2 id="resultTitle">צילום מהעבר</h2>
-      <div id="resultBody"></div>
-      <details><summary>מה ביקשנו מהמודל</summary><pre id="resultPrompt"></pre></details>
-      <div class="row"><a class="cta primary" id="resultSave" download="vision-window.png" hidden>שמירת התמונה</a><button class="cta" type="button" data-close>סגירה</button></div>
-    </div>
-  </div>
-
-  <input type="file" id="photoInput" accept="image/*" hidden>
   <div class="toast" id="toast" role="status"></div>
 </div>
 <script type="module" src="src/main.js"></script>

@@ -1,59 +1,38 @@
-// "Photo from the past": sends the current frame to an image-editing model with an instruction
-// built from what the camera recognised, where the viewer is and which year they chose.
-// The key stays in this browser (localStorage) or on the project's own server.
+// Rebuilds the whole camera view as it would have looked in the chosen year: streets, buildings,
+// vehicles, people and light. Three engines: a free public model (no key, slower, daily quota),
+// or Gemini / OpenAI with the user's own key, kept only in this browser.
+import { GRADIO_CLIENT, FREE_SPACE } from './config.js';
 
 const SETTINGS_KEY = 'vw:ai';
 export const PROVIDERS = {
-  gemini: { label: 'Google Gemini', model: 'gemini-2.5-flash-image', keyUrl: 'https://aistudio.google.com/apikey' },
-  openai: { label: 'OpenAI', model: 'gpt-image-1', keyUrl: 'https://platform.openai.com/api-keys' },
+  free: { label: 'חינמי (FLUX Kontext ב-Hugging Face)', model: FREE_SPACE, keyUrl: 'https://huggingface.co/settings/tokens', keyLabel: 'טוקן של Hugging Face (לא חובה, מגדיל את המכסה)' },
+  gemini: { label: 'Google Gemini', model: 'gemini-2.5-flash-image', keyUrl: 'https://aistudio.google.com/apikey', keyLabel: 'מפתח API' },
+  openai: { label: 'OpenAI', model: 'gpt-image-1', keyUrl: 'https://platform.openai.com/api-keys', keyLabel: 'מפתח API' },
 };
 
 export function loadSettings() {
-  try { return { provider: 'gemini', key: '', model: '', ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
-  catch { return { provider: 'gemini', key: '', model: '' }; }
+  const base = { provider: 'free', key: '', model: '' };
+  try { const s = { ...base, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; return PROVIDERS[s.provider] ? s : base; }
+  catch { return base; }
 }
 export function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* private mode */ } }
 
-const PLACE_WORDS = { left: 'on the left', right: 'on the right' };
-const OBJ = { car: 'car', motorcycle: 'motorcycle', bicycle: 'bicycle', bus: 'bus', truck: 'truck', bench: 'bench', chair: 'chair', 'traffic light': 'traffic light', 'fire hydrant': 'fire hydrant', 'stop sign': 'stop sign', 'parking meter': 'parking meter' };
-const KIND = {
-  donkey: 'a donkey', horse: 'a horse', camel: 'a camel', carriage: 'a horse-drawn carriage', cart: 'a donkey cart', wagon: 'a horse-drawn wagon',
-  vintage_car: 'a period-correct early automobile', car70: 'a period-correct 1970s car', bus_old: 'an early bus', bus70: 'a 1970s bus', scooter: 'a vintage Vespa scooter',
-  bicycle_old: 'an old black bicycle', pod: 'an autonomous electric pod', hoverbike: 'a hover bike', stone: 'a rough limestone block', bench_wood: 'a wooden slat bench',
-  bench_iron: 'a cast iron bench', bench_concrete: 'a 1970s concrete bench', bench_future: 'a sleek smart bench', stool: 'a wooden stool',
-  lamp_oil: 'an oil street lantern', lamp_gas: 'a gas street lamp', remove: 'nothing (remove it)',
-};
-
-/** Build the edit instruction from the scene facts, the place and the era profile. */
-export function buildPrompt({ year, place, region, profile, facts }) {
+/** Instruction for rebuilding the entire scene. `short` keeps it within FLUX's prompt budget. */
+export function buildPrompt({ year, place, region, profile, short = false }) {
   const p = profile.prompt;
-  const lines = [
-    `Transform this photo so it looks like the same spot photographed in the year ${year}, at ${place} (${region}).`,
-    'Keep the exact composition, camera angle, perspective, the street layout and building positions. Keep every person in the same place, pose and body position; keep their faces recognisable.',
-    `Dress every person in ${p.attire}.`,
-  ];
-  const people = facts.people || [];
-  people.forEach((x, i) => {
-    if (x.riding) lines.push(`The person ${x.where} who is riding should ride ${KIND[profile.transport.mount] || 'a period-appropriate mount'} instead, dressed for the era.`);
-    else if (x.sitting) lines.push(`The person ${x.where} who is sitting should sit on ${KIND[profile.furniture.bench] || 'a period-appropriate seat'}.`);
-    else if (i < 6) lines.push(`Person ${i + 1} ${x.where}: same pose, period clothing.`);
-  });
-  for (const o of facts.objects || []) {
-    if (!o.becomes || !OBJ[o.label]) continue;
-    lines.push(`Replace the ${OBJ[o.label]} ${PLACE_WORDS[o.where] || o.where} with ${KIND[o.becomes] || o.becomes}, at the same position and scale.`);
+  if (short) {
+    return `Turn this exact view into a real photograph taken here in ${year} (${region}). Keep the same camera angle, perspective and layout. `
+      + `Change the whole environment to ${year}: ${p.street}. People wear ${p.attire}. Vehicles: ${p.transport}. ${p.photo}.`;
   }
-  lines.push(`Vehicles in this era are ${p.transport}. Street furniture: ${p.furniture}.`);
-  lines.push(`The street itself: ${p.street}. Remove anything that did not exist in ${year} (phones, modern cars, plastic, LED screens, modern signs, power cables where inappropriate).`);
-  lines.push(`Photographic style: ${p.photo}. The result must look like a real photograph, not an illustration.`);
-  return lines.join('\n');
-}
-
-/** Grab the current source frame as a JPEG data URL, longest side ≤ maxSide. */
-export function captureFrame(el, w, h, maxSide = 1280) {
-  const k = Math.min(1, maxSide / Math.max(w, h));
-  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
-  c.getContext('2d').drawImage(el, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.9);
+  return [
+    `Rebuild this entire photo as the same place photographed in the year ${year}, at ${place} (${region}).`,
+    'Keep the exact viewpoint, camera angle, perspective and composition, and the position of the street, the ground and the large structures, so the picture lines up with the original.',
+    `Change the whole environment, not just single objects: ${p.street}.`,
+    `Buildings: keep those that plausibly stood in ${year} and restore them to their look at the time; replace newer ones with what stood there then. Road and pavement surfaces, vegetation, lighting, signs and shopfronts all match ${year}.`,
+    `Any people stay where they are, in the same poses, dressed in ${p.attire}. Vehicles become ${p.transport}. Street furniture: ${p.furniture}.`,
+    `Nothing from after ${year} may remain: no phones, modern cars, plastic, LED screens, modern signage or materials.`,
+    `Photographic style: ${p.photo}. It must look like a real photograph, not an illustration.`,
+  ].join('\n');
 }
 
 async function errorText(res) {
@@ -61,35 +40,56 @@ async function errorText(res) {
   try { const j = await res.json(); msg = j.error?.message || j.error || msg; } catch { /* not JSON */ }
   if (res.status === 400 && /key/i.test(msg)) return 'מפתח ה-API לא תקין. בדקו אותו בהגדרות.';
   if (res.status === 401 || res.status === 403) return 'מפתח ה-API נדחה. בדקו שהוא נכון ושיש לו הרשאה למודל.';
-  if (res.status === 429) return 'חרגתם ממכסת השימוש של הספק. נסו שוב בעוד דקה או בדקו את החיוב בחשבון.';
+  if (res.status === 429) return 'חרגתם ממכסת השימוש של הספק. נסו שוב בעוד דקה, או בדקו את החיוב בחשבון.';
   return `הספק החזיר שגיאה: ${msg}`;
 }
 
-/** Run the edit. Returns a data URL of the generated image. */
-export async function transformImage({ dataUrl, prompt, settings, serverBase, signal }) {
+async function viaFreeSpace(dataUrl, prompt, token) {
+  let mod;
+  try { mod = await import(GRADIO_CLIENT); } catch { throw new Error('לא הצלחנו לטעון את הספרייה של המודל החינמי. בדקו את החיבור לאינטרנט.'); }
+  const { Client, handle_file } = mod;
+  const blob = await (await fetch(dataUrl)).blob();
+  let client;
+  try { client = await Client.connect(FREE_SPACE, token ? { hf_token: token } : undefined); }
+  catch { throw new Error('המודל החינמי לא זמין כרגע (ייתכן שהוא בתחזוקה או עמוס). נסו שוב מאוחר יותר, או בחרו Gemini בהגדרות.'); }
+  let r;
+  try {
+    r = await client.predict('/infer', { input_image: handle_file(blob), prompt, seed: 0, randomize_seed: true, guidance_scale: 2.5, steps: 28 });
+  } catch (e) {
+    const m = String(e?.message || e);
+    if (/quota|ZeroGPU|exceeded/i.test(m)) throw new Error('נגמרה המכסה החינמית להיום. אפשר להוסיף בהגדרות טוקן חינמי של Hugging Face כדי לקבל מכסה גדולה יותר, או לנסות שוב מחר.');
+    throw new Error(`המודל החינמי החזיר שגיאה: ${m.slice(0, 160)}`);
+  }
+  const out = Array.isArray(r.data) ? r.data[0] : r.data;
+  const url = typeof out === 'string' ? out : out?.url;
+  if (!url) throw new Error('המודל החינמי לא החזיר תמונה. נסו שוב.');
+  return url;
+}
+
+/** Run the transformation. Returns an image URL (data: or https:). */
+export async function transformImage({ dataUrl, year, place, region, profile, settings, serverBase, signal }) {
   const b64 = dataUrl.split(',')[1];
+  const prompt = buildPrompt({ year, place, region, profile, short: !serverBase && settings.provider === 'free' });
   if (serverBase) {
     const res = await fetch(`${serverBase}/api/ai/transform`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: b64, mime: 'image/jpeg', prompt }) });
     if (!res.ok) throw new Error(await errorText(res));
-    const j = await res.json(); return `data:${j.mime};base64,${j.image}`;
+    const j = await res.json(); return { url: `data:${j.mime};base64,${j.image}`, prompt };
   }
-  if (!settings.key) throw new Error('צריך מפתח API כדי ליצור תמונה מהעבר. הוסיפו אותו בהגדרות.');
+  if (settings.provider === 'free') return { url: await viaFreeSpace(dataUrl, prompt, settings.key), prompt };
+  if (!settings.key) throw new Error('הספק שבחרתם צריך מפתח API. הוסיפו אותו בהגדרות, או חזרו למודל החינמי.');
   if (settings.provider === 'openai') {
-    const blob = await (await fetch(dataUrl)).blob();
     const form = new FormData();
-    form.append('model', settings.model || PROVIDERS.openai.model); form.append('prompt', prompt); form.append('image', blob, 'frame.jpg');
+    form.append('model', settings.model || PROVIDERS.openai.model); form.append('prompt', prompt);
+    form.append('image', await (await fetch(dataUrl)).blob(), 'frame.jpg');
     const res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', signal, headers: { Authorization: `Bearer ${settings.key}` }, body: form });
     if (!res.ok) throw new Error(await errorText(res));
-    const j = await res.json(); return `data:image/png;base64,${j.data[0].b64_json}`;
+    const j = await res.json(); return { url: `data:image/png;base64,${j.data[0].b64_json}`, prompt };
   }
   const model = settings.model || PROVIDERS.gemini.model;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.key },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: b64 } }] }],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
-    }),
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: b64 } }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
   });
   if (!res.ok) throw new Error(await errorText(res));
   const j = await res.json();
@@ -97,8 +97,8 @@ export async function transformImage({ dataUrl, prompt, settings, serverBase, si
   const img = parts.find((p) => p.inlineData || p.inline_data);
   if (!img) {
     const text = parts.find((p) => p.text)?.text;
-    throw new Error(text ? `המודל לא החזיר תמונה: ${text.slice(0, 160)}` : 'המודל לא החזיר תמונה. נסו שוב או בחרו מודל אחר בהגדרות.');
+    throw new Error(text ? `המודל לא החזיר תמונה: ${text.slice(0, 160)}` : 'המודל לא החזיר תמונה. נסו שוב.');
   }
   const d = img.inlineData || img.inline_data;
-  return `data:${d.mimeType || d.mime_type || 'image/png'};base64,${d.data}`;
+  return { url: `data:${d.mimeType || d.mime_type || 'image/png'};base64,${d.data}`, prompt };
 }
