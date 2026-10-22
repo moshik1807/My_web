@@ -1,7 +1,6 @@
 // App shell: camera, timeline, location, and turning the whole scene into another era.
 import * as THREE from 'three';
 import { LiveView } from './live.js';
-import { SceneParser } from './scene.js';
 import { LocationService, PRESETS } from './location.js';
 import { ERAS, eraFor, profileFor, REGIONS } from './periods.js';
 import { loadSettings, saveSettings, PROVIDERS, transformImage } from './ai.js';
@@ -18,7 +17,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('vw:' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 
-const state = { year: clamp(store.get('year', 1920), YEAR_MIN, YEAR_MAX), lens: false, loop: false, busy: false, playing: false, lensGeom: { x: 0, y: 0, r: 0 } };
+const state = { year: clamp(store.get('year', 1920), YEAR_MIN, YEAR_MAX), lens: false, auto: true, busy: false, playing: false, lensGeom: { x: 0, y: 0, r: 0 } };
 const server = { base: null, ai: false };
 
 /* ---------------------------------------------------------------- renderer */
@@ -29,7 +28,6 @@ catch (e) { $('#intro .card p').textContent = 'הדפדפן הזה לא תומך
 const dpr = Math.min(window.devicePixelRatio || 1, 2);
 let W = 1, H = 1;
 const live = new LiveView(renderer);
-const parser = new SceneParser();
 const loc = new LocationService();
 
 function resize() {
@@ -56,10 +54,9 @@ function updateEra() {
   $('#yearText').textContent = state.year;
   $('#eraLabel').textContent = p.label; $('#eraBlurb').textContent = p.blurb;
   $('#eraSpan').textContent = `${p.era.start}–${Math.min(p.era.end, YEAR_MAX)}`;
-  live.setEra(p.grade, p.scene);
+  live.setGrade(p.grade);
   document.querySelectorAll('.klabel').forEach((el) => el.classList.toggle('active', +el.dataset.year === p.era.year));
-  const now = p.era.key === 'now';
-  $('#shutter').innerHTML = now ? 'בחרו<br>שנה' : (state.year < new Date().getFullYear() ? 'הפכו<br>לעבר' : 'הפכו<br>לעתיד');
+  updateButton();
 }
 function updatePlace() {
   const s = loc.status;
@@ -119,16 +116,10 @@ async function startCamera() {
     status('אין גישה למצלמה. אשרו גישה למצלמה בהגדרות הדפדפן ורעננו את הדף.');
     return;
   }
-  sceneInfo('טוען את מנוע הבנת הסצנה…');
-  parser.init((msg) => sceneInfo(msg)).then(() => sceneInfo(''), (e) => {
-    console.error(e);
-    sceneInfo('לא הצלחנו לטעון את מודל הסצנה. בדקו את החיבור לאינטרנט ורעננו את הדף.', true);
-  });
-  if (profile().era.key === 'now') toast('גררו את סרגל הזמן לשנה אחרת, ואז לחצו "הפכו לעבר".', 5000);
+  if (profile().era.key === 'now') toast('גררו את סרגל הזמן לשנה אחרת, וכל הסביבה תתחיל להשתנות.', 5000);
+  pump();
 }
 $('#startCamera').addEventListener('click', startCamera);
-
-function sceneInfo(msg, isErr = false) { const el = $('#sceneInfo'); el.hidden = !msg; el.textContent = msg; el.classList.toggle('bad', isErr); }
 
 /* ---------------------------------------------------------------- AI: the whole scene in another era */
 let abort = null, resultUrl = null;
@@ -139,54 +130,57 @@ function progress(msg, isErr = false) {
   p.appendChild(document.createTextNode(msg));
 }
 function dropResult() {
-  if (abort) abort.abort(); abort = null; state.busy = false; $('#shutter').disabled = false;
-  live.clearResult(); $('#btnLive').hidden = true; $('#btnSave').hidden = true; progress('');
+  if (abort) abort.abort(); abort = null; state.busy = false;
+  live.clearResult(); $('#btnSave').hidden = true; progress(''); updateButton();
 }
 async function transformOnce() {
-  if (!live.video) return toast('פתחו קודם את המצלמה.');
-  const p = profile();
-  if (!p.prompt) { toast('בחרו בסרגל שנה בעבר או בעתיד.'); return false; }
+  const p = profile(); if (!live.video || !p.prompt) return false;
   const settings = loadSettings();
-  state.busy = true; $('#shutter').disabled = true;
-  const year = state.year, t0 = performance.now();
-  const timer = setInterval(() => progress(`בונה את הסביבה כפי שנראתה ב-${year}… ${Math.round((performance.now() - t0) / 1000)} שנ׳`), 1000);
-  progress(`בונה את הסביבה כפי שנראתה ב-${year}…`);
+  state.busy = true; updateButton();
+  const year = state.year, t0 = performance.now(), first = !live.showingResult;
+  const label = () => `${first ? 'בונה' : 'מעדכן'} את הסביבה של ${year}… ${Math.round((performance.now() - t0) / 1000)} שנ׳`;
+  const timer = setInterval(() => progress(label()), 1000); progress(label());
   abort = new AbortController(); const signal = abort.signal;
   try {
     const { url } = await transformImage({ dataUrl: live.capture(), year, place: loc.describe(), region: REGIONS[loc.region].en, profile: p, settings, serverBase: server.ai ? server.base : null, signal });
     if (signal.aborted) return false;
     const img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; await img.decode();
-    if (signal.aborted || year !== state.year && eraFor(year).key !== eraFor(state.year).key) return false;
-    live.showResult(img); resultUrl = url;
-    $('#btnLive').hidden = false; prepareSave(url, year);
+    if (signal.aborted || eraFor(year).key !== eraFor(state.year).key) return false;
+    live.showResult(img); prepareSave(url, year);
     progress('');
     return true;
   } catch (e) {
     if (signal.aborted || e.name === 'AbortError') return false;
-    progress(e.message === 'Failed to fetch' ? 'אין חיבור למנוע ה-AI. בדקו את החיבור לאינטרנט ונסו שוב.' : e.message, true);
-    setLoop(false);
+    progress(e.message === 'Failed to fetch' ? 'אין חיבור למנוע ה-AI. בדקו את החיבור לאינטרנט ולחצו "המשך".' : e.message, true);
+    state.auto = false;
     return false;
-  } finally { clearInterval(timer); state.busy = false; $('#shutter').disabled = false; }
+  } finally { clearInterval(timer); state.busy = false; updateButton(); }
 }
 async function prepareSave(url, year) {
   const a = $('#btnSave');
   try { const blob = await (await fetch(url)).blob(); if (a.href.startsWith('blob:')) URL.revokeObjectURL(a.href); a.href = URL.createObjectURL(blob); a.download = `vision-window-${year}.jpg`; a.hidden = false; }
   catch { a.hidden = true; }
 }
-$('#shutter').addEventListener('click', () => { if (!state.busy) transformOnce(); });
-$('#btnLive').addEventListener('click', () => { setLoop(false); dropResult(); });
 
-/* Continuous mode: as soon as one picture is ready, capture the current view and build the next. */
-function setLoop(on) { state.loop = on; $('#btnLoop').setAttribute('aria-pressed', on); if (on) runLoop(); }
-async function runLoop() {
-  while (state.loop) {
-    if (!state.busy) { const ok = await transformOnce(); if (!ok && state.loop && !profile().prompt) { setLoop(false); break; } }
-    await new Promise((r) => setTimeout(r, 400));
+/* Automatic and continuous: while the camera is open, each finished picture immediately starts
+   the next one from the current view, so the whole surroundings keep turning into the chosen era.
+   It pauses when the app is in the background. */
+function updateButton() {
+  const b = $('#shutter'), now = !profile().prompt;
+  b.disabled = now; b.innerHTML = now ? 'בחרו<br>שנה' : state.auto ? 'עצירה' : 'המשך';
+  b.setAttribute('aria-label', now ? 'בחרו שנה בסרגל' : state.auto ? 'עצירת העדכון האוטומטי' : 'המשך העדכון האוטומטי');
+}
+async function pump() {
+  if (state.pumping) return; state.pumping = true;
+  while (true) {
+    if (state.auto && !document.hidden && !state.busy && live.video && profile().prompt) await transformOnce();
+    await new Promise((r) => setTimeout(r, 500));
   }
 }
-$('#btnLoop').addEventListener('click', () => {
-  if (!state.loop && loadSettings().provider === 'free' && !server.ai) toast('מצב רציף עם המנוע החינמי ייגמר מהר מהמכסה היומית.', 5000);
-  setLoop(!state.loop);
+$('#shutter').addEventListener('click', () => {
+  state.auto = !state.auto;
+  if (!state.auto) { if (abort) abort.abort(); progress(''); }
+  updateButton();
 });
 
 /* ---------------------------------------------------------------- lens */
@@ -275,14 +269,11 @@ const clock = new THREE.Clock(); let time = 0;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05); time += dt;
   if (state.playing) { const y = playFrom + (performance.now() - playT0) / 1000 * 8; if (y >= YEAR_MAX) { setYear(YEAR_MAX); stopPlay(); } else setYear(y); }
-  if (live.video) {
-    if (parser.ready && profile().scene) parser.update(video).catch((e) => console.error(e));
-    live.setSegmentation(parser); live.render(dt, time);
-  }
+  if (live.video) live.render(dt, time);
   requestAnimationFrame(frame);
 }
 
 buildTicks(); resize(); setYear(state.year); updatePlace();
 detectServer();
 requestAnimationFrame(frame);
-window.__vw = { state, live, loc, setYear, parser };
+window.__vw = { state, live, loc, setYear };

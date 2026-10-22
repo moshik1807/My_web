@@ -57,8 +57,6 @@ video#cam { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-eve
 .era-year { font-family: var(--f-display); font-weight: 700; font-size: clamp(40px, 9vw, 64px); line-height: 0.92; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 10px; }
 .era-year small { font-family: var(--f-ui); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--brass); direction: ltr; white-space: nowrap; }
 .era-label { margin-top: 6px; font-family: var(--f-display); font-size: 18px; font-weight: 500; color: var(--brass-hi); text-wrap: balance; }
-.scene-info { margin-top: 6px; font-size: 12px; color: var(--brass-hi); }
-.scene-info.bad { color: var(--warn); }
 .era-blurb { margin-top: 3px; color: var(--ink-dim); line-height: 1.45; font-size: 13.5px; text-wrap: pretty; }
 
 .side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; min-width: 0; max-width: min(20rem, 40vw); }
@@ -171,7 +169,6 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
       <div class="era-year"><span id="yearText">1920</span><small id="eraSpan"></small></div>
       <div class="era-label" id="eraLabel"></div>
       <div class="era-blurb" id="eraBlurb"></div>
-      <div class="scene-info" id="sceneInfo" hidden></div>
     </section>
     <div class="side">
       <button class="panel place" id="placeBtn">
@@ -185,8 +182,7 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
   <div class="hud hud-bottom" id="hudBottom" hidden>
     <div class="shutter-row">
       <span class="progress" id="progress" hidden></span>
-      <button class="shutter" id="shutter" aria-label="הפכו את כל הסביבה לשנה שנבחרה">הפכו<br>לעבר</button>
-      <button class="btn panel toggle" id="btnLoop" aria-pressed="false">רציף</button>
+      <button class="shutter" id="shutter">עצירה</button>
     </div>
     <div class="panel timeline">
       <button class="play" id="play" aria-label="הפעלת מסע בזמן"><svg viewBox="0 0 10 10"><path id="playIcon" d="M2 1l7 4-7 4z"/></svg></button>
@@ -198,7 +194,6 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
     <div class="controls">
       <div class="panel group">
         <button class="btn" id="btnLens" aria-pressed="false">עדשת רנטגן</button>
-        <button class="btn" id="btnLive" aria-pressed="false" hidden>חזרה למצלמה</button>
         <a class="btn" id="btnSave" hidden download="vision-window.jpg">שמירת התמונה</a>
       </div>
       <div class="panel group">
@@ -211,11 +206,11 @@ details pre { white-space: pre-wrap; direction: ltr; text-align: left; font-fami
     <div class="card">
       <div class="eyebrow">VISION WINDOW</div>
       <h1>מה היה כאן פעם?</h1>
-      <p>כוונו את המצלמה לסביבה ובחרו שנה. כל מה שהמצלמה רואה משתנה בזמן אמת: השמיים, הבניינים, הכביש והמדרכה, האנשים, וכלי הרכב והעמודים נעלמים. "הפכו לעבר" יוצר בנוסף צילום מציאותי בעזרת AI.</p>
+      <p>כוונו את המצלמה ובחרו שנה. כל כמה שניות, כל מה שהמצלמה רואה נבנה מחדש כפי שהיה נראה אז: בניינים, רחוב, אנשים ובגדים, כלי רכב, רהיטים וחפצים. מחשב הופך למכונת כתיבה, ומכונית לכרכרה.</p>
       <div class="actions">
         <button class="cta primary" id="startCamera">פתחו את החלון<small>מצלמה ומיקום</small></button>
       </div>
-      <p class="note">המיקום קובע איך נראה האזור בכל תקופה. התמונה נשלחת למודל ה-AI רק כשלוחצים על "הפכו לעבר" או מפעילים מצב רציף.</p>
+      <p class="note">המיקום קובע איך נראה האזור בכל תקופה. התמונות מהמצלמה נשלחות למנוע ה-AI שבחרתם בהגדרות. אפשר לעצור בכל רגע.</p>
     </div>
   </div>
 

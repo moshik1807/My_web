@@ -1,5 +1,5 @@
-// Rebuilds the whole camera view as it would have looked in the chosen year: streets, buildings,
-// vehicles, people and light. Three engines: a free public model (no key, slower, daily quota),
+// Rebuilds the whole camera view as it would have looked in the chosen year, indoors or out:
+// buildings, streets, people and clothes, vehicles, furniture and objects. Three engines: a free public model (no key, slower, daily quota),
 // or Gemini / OpenAI with the user's own key, kept only in this browser.
 import { GRADIO_CLIENT, FREE_SPACE } from './config.js';
 
@@ -17,20 +17,28 @@ export function loadSettings() {
 }
 export function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* private mode */ } }
 
+// What everyday objects become, indoors or out (computers, phones, lights, furniture...).
+const OBJECTS = {
+  e1880: 'no electricity: computers, screens and keyboards become ledgers, inkwells and paper; phones disappear; electric lights become oil lamps and candles; modern furniture becomes heavy carved wood; plastic, metal and glass items become wood, brass, clay and woven baskets',
+  e1920: 'computers and screens become typewriters, ledgers and paper files; phones become candlestick telephones; lighting is bare incandescent bulbs or brass fixtures; furniture is dark wood and leather; no plastic',
+  e1970: 'computers become electric typewriters and calculators; screens become CRT television sets; phones become rotary dial phones; furniture is formica, teak and orange or brown upholstery; fluorescent tube lights',
+  e2050: 'devices become sleek holographic and transparent displays; furniture is minimal, organic and modular; soft integrated lighting; plants built into surfaces',
+};
+
 /** Instruction for rebuilding the entire scene. `short` keeps it within FLUX's prompt budget. */
 export function buildPrompt({ year, place, region, profile, short = false }) {
-  const p = profile.prompt;
+  const p = profile.prompt, objects = OBJECTS[profile.era.key] || '';
   if (short) {
-    return `Turn this exact view into a real photograph taken here in ${year} (${region}). Keep the same camera angle, perspective and layout. `
-      + `Change the whole environment to ${year}: ${p.street}. People wear ${p.attire}. Vehicles: ${p.transport}. ${p.photo}.`;
+    return `Transform this exact photo into a real photograph taken in ${year} in ${region}. Keep the same viewpoint, layout and the positions of people and objects, `
+      + `but change everything in the scene to ${year}: ${objects}. People wear ${p.attire}. If outdoors: ${p.street}; vehicles become ${p.transport}. ${p.photo}.`;
   }
   return [
-    `Rebuild this entire photo as the same place photographed in the year ${year}, at ${place} (${region}).`,
-    'Keep the exact viewpoint, camera angle, perspective and composition, and the position of the street, the ground and the large structures, so the picture lines up with the original.',
-    `Change the whole environment, not just single objects: ${p.street}.`,
-    `Buildings: keep those that plausibly stood in ${year} and restore them to their look at the time; replace newer ones with what stood there then. Road and pavement surfaces, vegetation, lighting, signs and shopfronts all match ${year}.`,
-    `Any people stay where they are, in the same poses, dressed in ${p.attire}. Vehicles become ${p.transport}. Street furniture: ${p.furniture}.`,
-    `Nothing from after ${year} may remain: no phones, modern cars, plastic, LED screens, modern signage or materials.`,
+    `Transform this entire photo into the same scene as it would have looked in the year ${year}, at ${place} (${region}).`,
+    'Whatever the scene is (a street, an office, a room, a shop, a landscape), keep the exact viewpoint, perspective and composition, and keep every person and object where it is, so the new picture lines up with the original.',
+    `Then change everything visible to its ${year} equivalent, not just colours: ${objects}.`,
+    `People keep their poses and positions but wear ${p.attire}.`,
+    `If outdoors: ${p.street}. Vehicles become ${p.transport}. Street furniture: ${p.furniture}.`,
+    `Nothing from after ${year} may remain: no phones, modern electronics, modern cars, plastic, LED lights or modern signage.`,
     `Photographic style: ${p.photo}. It must look like a real photograph, not an illustration.`,
   ].join('\n');
 }
