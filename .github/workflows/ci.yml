@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: vision
+          POSTGRES_PASSWORD: vision
+          POSTGRES_DB: vision_window
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vision -d vision_window"
+          --health-interval 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://vision:vision@localhost:5432/vision_window
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run migrate
+      - run: npm run seed
+      - run: npm test

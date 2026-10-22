@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: vision
+      POSTGRES_PASSWORD: vision
+      POSTGRES_DB: vision_window
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vision -d vision_window"]
+      interval: 3s
+      retries: 20
+
+  api:
+    build: { context: ., dockerfile: server/Dockerfile }
+    environment:
+      DATABASE_URL: postgres://vision:vision@db:5432/vision_window
+    ports: ["8080:8080"]
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  pgdata:
