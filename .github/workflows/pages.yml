@@ -2,7 +2,7 @@ name: Deploy web client to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, ccr-85a82b58-0iesm1]
     paths: ["client/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
